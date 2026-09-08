@@ -1,0 +1,11 @@
+local_port: 5267
+
+http_tracker:
+  announce_retries: 4
+  base_announce_timeout: 3s
+
+udp_tracker:
+  connect_retries: 4
+  base_connect_timeout: 1s
+  announce_retries: 4
+  base_announce_timeout: 1s
