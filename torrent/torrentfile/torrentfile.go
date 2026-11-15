@@ -3,55 +3,49 @@ package torrentfile
 import (
 	"crypto/sha1"
 	"io"
+	"kindled/lib"
+	"log/slog"
 	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/zeebo/bencode"
 )
 
 type TorrentFile struct {
-	Info Info `bencode:"info"`
-
-	// SHA-1 hash of Info field. Acts as torrent id
-	InfoHash []byte
-
-	// Size of all files in bytes
-	TotalFileSize uint64
-
-	// announce + announce list
-	TrackerList []string `bencode:"-"`
-
-	Comment      string `bencode:"comment"`
-	CreatedBy    string `bencode:"created by"`
-	CreationDate int64  `bencode:"creation date"`
+	InfoHash     [20]byte // SHA-1 hash of Info field. Acts as torrent ID
+	TrackerList  []string // Tracker URLs
+	Comment      string
+	CreatedBy    string
+	CreationDate int64
+	Info         Info
 }
 
 type Info struct {
-	// Torrent name
-	Name string `bencode:"name"`
-
-	// File size in bytes. Empty for a multi-file torrent
-	Length uint64 `bencode:"length"`
-
-	// Info about files. Empty for a single-file torrent
-	Files []File `bencode:"files"`
-
-	// Size of the chunks the files are split into
-	PieceLength int `bencode:"piece length"`
-
-	// Concatenated SHA-1 hashes of all chunks
-	Pieces []byte `bencode:"pieces"`
+	TotalLength uint64     // Total size of data to download
+	Files       *Files     // Unlike original structure, not empty for single-file torrents
+	PieceLength uint32     // Size of the chunks files are split into
+	PieceHashes [][20]byte // SHA-1 hashes of all chunks
 }
 
-type File struct {
-	Path []string `bencode:"path"`
+func (tf TorrentFile) LogValue() slog.Value {
 
-	Length uint64 `bencode:"length"`
-
-	// Often omitted. The only impotant one is "p" (padding file)
-	Attr string `bencode:"attr"`
+	return slog.GroupValue(
+		slog.String("comment", tf.Comment),
+		slog.String("created_by", tf.CreatedBy),
+		slog.String("creation_date", time.Unix(tf.CreationDate, 0).Format("2/Jan/2006")),
+		// slog.Int("trackers", len(tf.TrackerList)),
+		// slog.String("comment", tf.Comment),
+		// slog.String("created_by", tf.CreatedBy),
+		slog.Int("files", len(tf.Info.Files.files)),
+		slog.String("size", lib.ConvertBytes(tf.Info.TotalLength)),
+		// slog.Int("pieces", len(tf.Info.PieceHashes)),
+		// slog.Any("piece_size", lib.ConvertBytes(tf.Info.PieceLength)),
+		//slog.String("info_hash", hex.EncodeToString(tf.InfoHash[:])),
+	)
 }
 
-func Open(fileName string) (*TorrentFile, error) {
+func Open(fileName, saveFolder string) (*TorrentFile, error) {
 
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -63,43 +57,58 @@ func Open(fileName string) (*TorrentFile, error) {
 		return nil, err
 	}
 
-	var torrentFile TorrentFile
-	if err := bencode.DecodeBytes(data, &torrentFile); err != nil {
+	var tf torrentFile
+	if err := bencode.DecodeBytes(data, &tf); err != nil {
 		return nil, err
 	}
 
-	supportStruct := struct {
-		// Primary tracker
-		Announce string `bencode:"announce"`
-
-		// Alternate trackers: {{tier1}, {tier2},...}
-		AnnounceList [][]string `bencode:"announce-list"`
-
-		InfoData bencode.RawMessage `bencode:"info"`
+	raw := struct {
+		Info bencode.RawMessage `bencode:"info"`
 	}{}
-
-	if err := bencode.DecodeBytes(data, &supportStruct); err != nil {
+	if err := bencode.DecodeBytes(data, &raw); err != nil {
 		return nil, err
 	}
 
-	hash := sha1.Sum(supportStruct.InfoData)
-	torrentFile.InfoHash = hash[:]
+	infoHash := sha1.Sum(raw.Info)
 
-	torrentFile.TrackerList = make([]string, 0, 1+len(supportStruct.AnnounceList))
-	torrentFile.TrackerList = append(torrentFile.TrackerList, supportStruct.Announce)
-	for _, URL := range supportStruct.AnnounceList {
-		torrentFile.TrackerList = append(torrentFile.TrackerList, URL...)
+	trackerList := make([]string, 0, len(tf.AnnounceList)+1)
+	trackerList = append(trackerList, tf.Announce)
+	for _, URL := range tf.AnnounceList {
+		trackerList = append(trackerList, URL...)
 	}
 
-	var totalFileSize uint64 = 0
-	if torrentFile.Info.Files != nil {
-		for _, files := range torrentFile.Info.Files {
-			totalFileSize += files.Length
+	var totalLength uint64 = 0
+	files := NewFiles(max(1, len(tf.Info.Files)), int64(tf.Info.PieceLength))
+	if tf.Info.Files == nil { // single-file torrent
+		totalLength = tf.Info.Length
+		files.AddFile(filepath.Join(saveFolder, tf.Info.Name), int64(tf.Info.Length))
+	} else { // multi-file torrent
+		for _, f := range tf.Info.Files {
+			totalLength += f.Length
+			path := filepath.Join(f.Path...)
+			files.AddFile(filepath.Join(saveFolder, tf.Info.Name, path), int64(f.Length))
 		}
-	} else {
-		totalFileSize = torrentFile.Info.Length
 	}
-	torrentFile.TotalFileSize = totalFileSize
 
-	return &torrentFile, nil
+	pieceCount := len(tf.Info.Pieces) / 20
+	pieceHashes := make([][20]byte, 0, pieceCount)
+	for i := 0; i < len(tf.Info.Pieces); i += 20 {
+		var hash [20]byte
+		copy(hash[:], tf.Info.Pieces[i:i+20])
+		pieceHashes = append(pieceHashes, hash)
+	}
+
+	return &TorrentFile{
+		InfoHash:     infoHash,
+		TrackerList:  trackerList,
+		Comment:      tf.Comment,
+		CreatedBy:    tf.CreatedBy,
+		CreationDate: tf.CreationDate,
+		Info: Info{
+			TotalLength: totalLength,
+			Files:       files,
+			PieceLength: tf.Info.PieceLength,
+			PieceHashes: pieceHashes,
+		},
+	}, nil
 }

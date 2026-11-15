@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -8,8 +10,15 @@ import (
 
 type Config struct {
 	LocalPort   uint16      `yaml:"local_port"`
+	Logger      Logger      `yaml:"logger"`
 	HTTPTracker HTTPTracker `yaml:"http_tracker"`
 	UDPTracker  UDPTracker  `yaml:"udp_tracker"`
+	Peer        Peer        `yaml:"peer"`
+}
+
+type Logger struct {
+	Format string `yaml:"format"`
+	Level  string `yaml:"level"`
 }
 
 type HTTPTracker struct {
@@ -24,10 +33,27 @@ type UDPTracker struct {
 	BaseAnnounceTimeout time.Duration `yaml:"base_announce_timeout"`
 }
 
-func New(filePath string) *Config {
+type Peer struct {
+	BlockSize        uint32        `yaml:"block_size"`
+	ConnectTimeout   time.Duration `yaml:"connect_timeout"`
+	HandshakeTimeout time.Duration `yaml:"handshake_timeout"`
+	PieceTimeout     time.Duration `yaml:"piece_timeout"`
+	MaxPendingPieces int           `yaml:"max_pending_pieces"`
+	MaxPendingBlocks int           `yaml:"max_pending_blocks"`
+}
+
+func New() (*Config, error) {
+	baseConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		return nil, err
+	}
+
+	filePath := filepath.Join(baseConfigDir, "kindled", "config.yaml")
+
 	var config Config
 	if err := cleanenv.ReadConfig(filePath, &config); err != nil {
-		panic("failed to parse config")
+		return nil, err
 	}
-	return &config
+	config.Peer.BlockSize = config.Peer.BlockSize * 1024
+	return &config, nil
 }

@@ -51,7 +51,7 @@ type AnnounceRequest struct {
 	Action        uint32 // Type of operation
 	TransactionID uint32 // ID of a request: UDP doesn't guarantee packet arrival order
 	InfoHash      []byte // SHA-1 hash of Info field in torrent file. Acts as torrent ID
-	PeerID        []byte // Identifier of this peer to other peers
+	localPeerID   []byte // Identifier of this peer to other peers
 	Downloaded    uint64 // Number of bytes downloaded
 	Left          uint64 // Number of bytes left to complete download
 	Uploaded      uint64 // Number of bytes sent to other peers
@@ -63,11 +63,11 @@ type AnnounceRequest struct {
 }
 
 func MakeAnnounce(
-	cfg config.UDPTracker,
+	cfg *config.UDPTracker,
 	network string,
 	trackerURL *url.URL,
 	torrentFile *torrentfile.TorrentFile,
-	peerID []byte,
+	localPeerID []byte,
 	localPort uint16,
 ) (*common.AnnounceResponse, error) {
 
@@ -91,10 +91,10 @@ func MakeAnnounce(
 		ConnectionID:  connectResponse.ConnectionID,
 		Action:        actionAnnounce,
 		TransactionID: rand.Uint32(),
-		InfoHash:      torrentFile.InfoHash,
-		PeerID:        peerID,
+		InfoHash:      torrentFile.InfoHash[:],
+		localPeerID:   localPeerID,
 		Downloaded:    0,
-		Left:          torrentFile.TotalFileSize,
+		Left:          torrentFile.Info.TotalLength,
 		Uploaded:      0,
 		Event:         eventStart,
 		IP:            0,
@@ -106,7 +106,7 @@ func MakeAnnounce(
 	return announce(cfg, conn, &announceReq)
 }
 
-func connect(cfg config.UDPTracker, conn net.Conn, req *connectRequest) (*connectResponse, error) {
+func connect(cfg *config.UDPTracker, conn net.Conn, req *connectRequest) (*connectResponse, error) {
 	sendBuf := make([]byte, 16)
 	binary.BigEndian.PutUint64(sendBuf[0:8], req.ProtocolID)
 	binary.BigEndian.PutUint32(sendBuf[8:12], req.Action)
@@ -169,13 +169,13 @@ func connect(cfg config.UDPTracker, conn net.Conn, req *connectRequest) (*connec
 	return nil, ErrRetryLimit
 }
 
-func announce(cfg config.UDPTracker, conn net.Conn, req *AnnounceRequest) (*common.AnnounceResponse, error) {
+func announce(cfg *config.UDPTracker, conn net.Conn, req *AnnounceRequest) (*common.AnnounceResponse, error) {
 	sendBuf := make([]byte, 98)
 	binary.BigEndian.PutUint64(sendBuf[0:8], req.ConnectionID)
 	binary.BigEndian.PutUint32(sendBuf[8:12], req.Action)
 	binary.BigEndian.PutUint32(sendBuf[12:16], req.TransactionID)
 	copy(sendBuf[16:36], req.InfoHash)
-	copy(sendBuf[36:56], req.PeerID)
+	copy(sendBuf[36:56], req.localPeerID)
 	binary.BigEndian.PutUint64(sendBuf[56:64], req.Downloaded)
 	binary.BigEndian.PutUint64(sendBuf[64:72], req.Left)
 	binary.BigEndian.PutUint64(sendBuf[72:80], req.Uploaded)

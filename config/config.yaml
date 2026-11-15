@@ -1,11 +1,23 @@
 local_port: 5267
 
+logger:
+  format: 'user'
+  level: 'info'
+
 http_tracker:
-  announce_retries: 4
-  base_announce_timeout: 3s
+  announce_retries:      1
+  base_announce_timeout: 2s
 
 udp_tracker:
-  connect_retries: 4
-  base_connect_timeout: 1s
-  announce_retries: 4
+  connect_retries:       1
+  base_connect_timeout:  1s
+  announce_retries:      1
   base_announce_timeout: 1s
+
+peer:
+  block_size:         16 # Kb
+  connect_timeout:    4s
+  handshake_timeout:  15s
+  piece_timeout:      60s
+  max_pending_pieces: 6
+  max_pending_blocks: 8

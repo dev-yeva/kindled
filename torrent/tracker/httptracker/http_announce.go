@@ -16,35 +16,34 @@ import (
 )
 
 type AnnounceRequest struct {
-	InfoHash   []byte // SHA-1 hash of Info field in torrent file. Acts as torrent ID
-	PeerID     []byte // Identifier of this peer to other peers
-	LocalPort  uint16 // Local incoming connection port
-	Uploaded   uint64 // Number of bytes sent to other peers
-	Downloaded uint64 // Number of bytes downloaded
-	Left       uint64 // Number of bytes left to complete download
+	InfoHash    []byte // SHA-1 hash of Info field in torrent file. Acts as torrent ID
+	localPeerID []byte // Identifier of this peer to other peers
+	LocalPort   uint16 // Local incoming connection port
+	Uploaded    uint64 // Number of bytes sent to other peers
+	Downloaded  uint64 // Number of bytes downloaded
+	Left        uint64 // Number of bytes left to complete download
 }
 
-// TODO: ошибки трекера
+// TODO: ОБРАБОТАТЬ ОШИБКИ ТРЕКЕРА ТИПА d14:failure reason20:unregistered torrente
 func MakeHTTPAnnounce(
-	cfg config.HTTPTracker,
+	cfg *config.HTTPTracker,
 	client *http.Client,
 	trackerURL *url.URL,
 	torrentFile *torrentfile.TorrentFile,
-	peerID []byte,
+	localPeerID []byte,
 	localPort uint16,
 ) (*common.AnnounceResponse, error) {
 
 	announceRequest := AnnounceRequest{
-		InfoHash:   torrentFile.InfoHash,
-		PeerID:     peerID,
-		LocalPort:  localPort,
-		Uploaded:   0,
-		Downloaded: 0,
-		Left:       torrentFile.TotalFileSize,
+		InfoHash:    torrentFile.InfoHash[:],
+		localPeerID: localPeerID,
+		LocalPort:   localPort,
+		Uploaded:    0,
+		Downloaded:  0,
+		Left:        torrentFile.Info.TotalLength,
 	}
 
 	announceURL := buildAnnounceURL(*trackerURL, announceRequest)
-
 	var lastErr error
 
 	for retry := range cfg.AnnounceRetries {
@@ -72,7 +71,7 @@ func MakeHTTPAnnounce(
 		if err != nil {
 			return nil, err
 		}
-
+		// pp.Println(string(body))
 		// 5xx - Server error; 429 - Too Many Requests
 		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
 			lastErr = fmt.Errorf("tracker returned retryable status: %s", resp.Status)
@@ -107,7 +106,7 @@ func buildAnnounceURL(trackerURL url.URL, announceRequest AnnounceRequest) strin
 
 	params := url.Values{
 		"info_hash":  []string{string(announceRequest.InfoHash)},
-		"peer_id":    []string{string(announceRequest.PeerID)},
+		"peer_id":    []string{string(announceRequest.localPeerID)},
 		"port":       []string{strconv.FormatUint(uint64(announceRequest.LocalPort), 10)},
 		"uploaded":   []string{strconv.FormatUint(announceRequest.Uploaded, 10)},
 		"downloaded": []string{strconv.FormatUint(announceRequest.Downloaded, 10)},
