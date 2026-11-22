@@ -19,5 +19,5 @@ peer:
   connect_timeout:    4s
   handshake_timeout:  15s
   piece_timeout:      60s
-  max_pending_pieces: 6
-  max_pending_blocks: 8
+  max_pending_pieces: 15
+  max_pending_blocks: 20

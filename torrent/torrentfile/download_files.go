@@ -1,6 +1,7 @@
 package torrentfile
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -50,10 +51,12 @@ func (fs *Files) AddFile(path string, length int64) error {
 		lastIdx := len(fs.files) - 1
 		cumLen = length + fs.files[lastIdx].CumulativeLength
 	}
-	file, err := os.Create(path)
+
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, progressFileMode)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to create/open progress file: %w", err)
 	}
+
 	fs.files = append(fs.files, &file1{
 		Path:             path,
 		CumulativeLength: cumLen,
@@ -62,7 +65,7 @@ func (fs *Files) AddFile(path string, length int64) error {
 	return nil
 }
 
-func (fs *Files) WritePiece(index int64, data []byte, lgr *slog.Logger) error {
+func (fs *Files) WritePiece(index int64, data []byte) error {
 	writeStart := index * fs.pieceLength
 	writeEnd := writeStart + int64(len(data))
 
@@ -85,8 +88,6 @@ func (fs *Files) WritePiece(index int64, data []byte, lgr *slog.Logger) error {
 
 			_, err := file.File.WriteAt(data[:fitIn], writePosition)
 			if err != nil {
-				lgr.Error("Failed to write piece", "error", err)
-
 				return err
 			}
 

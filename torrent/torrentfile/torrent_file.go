@@ -19,6 +19,7 @@ type TorrentFile struct {
 	CreatedBy    string
 	CreationDate int64
 	Info         Info
+	Progress     *ProgressFile // Bitfield of downloaded pieces
 }
 
 type Info struct {
@@ -90,12 +91,22 @@ func Open(fileName, saveFolder string) (*TorrentFile, error) {
 		}
 	}
 
-	pieceCount := len(tf.Info.Pieces) / 20
+	pieceCount := uint32(len(tf.Info.Pieces) / 20)
 	pieceHashes := make([][20]byte, 0, pieceCount)
 	for i := 0; i < len(tf.Info.Pieces); i += 20 {
 		var hash [20]byte
 		copy(hash[:], tf.Info.Pieces[i:i+20])
 		pieceHashes = append(pieceHashes, hash)
+	}
+
+	var subfolder string      // multi-torrent files are saved in dest/name folder
+	if tf.Info.Files != nil { // multi-file torrent
+		subfolder = tf.Info.Name
+	}
+
+	progressFile, err := NewProgressFile(tf.Info.Name, filepath.Join(saveFolder, subfolder), pieceCount)
+	if err != nil {
+		return nil, err
 	}
 
 	return &TorrentFile{
@@ -110,5 +121,6 @@ func Open(fileName, saveFolder string) (*TorrentFile, error) {
 			PieceLength: tf.Info.PieceLength,
 			PieceHashes: pieceHashes,
 		},
+		Progress: progressFile,
 	}, nil
 }

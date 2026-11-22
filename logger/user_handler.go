@@ -20,6 +20,14 @@ var (
 	msgColor  = color.New(color.FgHiBlue).SprintFunc()
 	keyColor  = color.New(color.FgHiBlack).SprintFunc()
 	valColor  = color.New(color.FgHiMagenta).SprintFunc()
+
+	lineBreakReplacer = strings.NewReplacer(
+		"\r\n", " ",
+		"\n", " ",
+		"\r", " ",
+		"\u2028", " ",
+		"\u2029", " ",
+	)
 )
 
 type UserHandler struct {
@@ -98,7 +106,9 @@ func (h *UserHandler) appendAttr(buf []byte, a slog.Attr, printKey bool) []byte 
 	default:
 		if a.Value.String() != "" {
 			if printKey {
-				buf = fmt.Appendf(buf, "%s%s ", keyColor(a.Key+"="), valColor(a.Value))
+				cleanVal := lineBreakReplacer.Replace(a.Value.String())
+				buf = fmt.Appendf(buf, "%s%s ", keyColor(a.Key+"="), valColor(cleanVal))
+				//buf = fmt.Appendf(buf, "%s%s ", keyColor(a.Key+"="), valColor(strings.ReplaceAll(a.Value.String(), "\n", " ")))
 			} else {
 				buf = fmt.Appendf(buf, "%s ", msgColor(a.Value))
 			}

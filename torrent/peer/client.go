@@ -2,15 +2,16 @@ package peer
 
 import (
 	"context"
+	"errors"
 	"kindled/config"
 	"kindled/lib/addresses"
 	"kindled/lib/download_progress"
 	"kindled/lib/set"
 	"kindled/torrent/torrentfile"
 	"log/slog"
+	"os"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type PeerClient struct {
@@ -21,9 +22,8 @@ type PeerClient struct {
 
 	connClosed chan struct{}
 
-	workingPeers     *atomic.Int32
-	downloadedPieces *atomic.Uint32
-	progress         *download_progress.DownloadProgress
+	workingPeers *atomic.Int32
+	progress     *download_progress.DownloadProgress
 }
 
 type pieceWork struct {
@@ -87,7 +87,6 @@ func NewPeerClient(
 
 	logger.Debug("Completed peer handshake", "working_peers", workingPeers.Load())
 
-	var downloadedPieces atomic.Uint32
 	return &PeerClient{
 		logger:       logger,
 		cfg:          cfg,
@@ -96,9 +95,13 @@ func NewPeerClient(
 
 		connClosed: connClosed,
 
-		workingPeers:     &workingPeers,
-		downloadedPieces: &downloadedPieces,
-		progress:         download_progress.New(logger, uint32(len(tf.Info.PieceHashes)), &downloadedPieces, &workingPeers),
+		workingPeers: &workingPeers,
+		progress: download_progress.New(
+			logger,
+			tf.Progress.PieceCount(),
+			tf.Progress.DownloadedPieces(),
+			&workingPeers,
+		),
 	}
 }
 
@@ -125,9 +128,7 @@ func (pc *PeerClient) Download() {
 
 	go func() {
 		for peerConn := range pc.peerConnChan {
-			if peerConn.conn != nil {
-				go peerConn.downloadPieces(workQueue, resultQueue)
-			}
+			go peerConn.downloadPieces(workQueue, resultQueue)
 		}
 	}()
 
@@ -136,12 +137,12 @@ func (pc *PeerClient) Download() {
 	semaphore := make(chan struct{}, pc.cfg.MaxPendingPieces)
 
 	go func() {
-		for i, hash := range pc.tf.Info.PieceHashes {
+		for i := range pc.tf.Progress.MissingPiecesRange() {
 			begin := uint64(i) * uint64(pc.tf.Info.PieceLength)
-			end := min(begin+uint64(pc.tf.Info.PieceLength), uint64(pc.tf.Info.TotalLength))
+			end := min(begin+uint64(pc.tf.Info.PieceLength), pc.tf.Info.TotalLength)
 			length := uint32(end - begin)
 
-			blocksToDownload := set.New[uint32](int(length/pc.cfg.BlockSize) + 1)
+			blocksToDownload := set.New[uint32](length/pc.cfg.BlockSize + 1)
 
 			for offset := uint32(0); offset < length; offset += pc.cfg.BlockSize {
 				blocksToDownload.Add(offset)
@@ -149,7 +150,7 @@ func (pc *PeerClient) Download() {
 
 			pw := &pieceWork{
 				index:            uint32(i),
-				hash:             hash,
+				hash:             pc.tf.Info.PieceHashes[i],
 				length:           length,
 				blocksToDownload: blocksToDownload,
 				data:             make([]byte, length),
@@ -160,26 +161,34 @@ func (pc *PeerClient) Download() {
 		}
 	}()
 
-	for count := 0; count < len(pc.tf.Info.PieceHashes); count++ {
+	for range pc.tf.Progress.MissingPiecesCount() {
 		select {
 		case <-ctx.Done():
-			pc.logger.Info("No peer to donwload from")
+			//pc.logger.Info("No peer to donwload from")
 			return
+
 		case res := <-resultQueue:
 			pc.logger.Debug("Completed piece download", "piece_result", res)
-			err := pc.tf.Info.Files.WritePiece(int64(res.index), res.data, &pc.logger)
+			err := pc.tf.Info.Files.WritePiece(int64(res.index), res.data)
+
 			if err != nil {
+				pc.logger.Error("Failed to write piece to download file", "error", err)
 				return
 			}
+
+			err = pc.tf.Progress.RecordPiece(int64(res.index))
+			if err != nil {
+				if !errors.Is(err, os.ErrClosed) {
+					pc.logger.Error("Failed to write piece to progress file", "error", err)
+				}
+				return
+			} else {
+				pc.logger.Debug("Writed piece to progress file")
+			}
 			pc.progress.Print()
-			pc.downloadedPieces.Add(1)
 			<-semaphore
-		case <-time.After(time.Minute):
-			count--
-			continue
 		}
 	}
-	pc.progress.Print()
-	pc.logger.Info("Completed download")
+	pc.tf.Progress.Complete()
 	close(workQueue)
 }

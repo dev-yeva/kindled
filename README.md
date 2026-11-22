@@ -44,7 +44,7 @@ go install ./kindled
 
 # Usage
 ```powershell
-kindled --torrent=example.torrent --dest=./downloads
+kindled --torrent=some.torrent --dest=./downloads
 ```
 
 

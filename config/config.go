@@ -47,8 +47,9 @@ func New() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	filePath := filepath.Join(baseConfigDir, "kindled", "config.yaml")
+
+	// filePath := filepath.Join("config", "config.yaml")
 
 	var config Config
 	if err := cleanenv.ReadConfig(filePath, &config); err != nil {

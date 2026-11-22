@@ -149,7 +149,7 @@ func (p *PeerConn) downloadPieces(workQueue chan *pieceWork, results chan *piece
 				for offset := uint32(0); offset < pw.length; offset += p.cfg.BlockSize {
 					pw.blocksToDownload.Add(offset)
 				}
-				pw.data = make([]byte, 0, pw.length)
+				pw.data = make([]byte, pw.length)
 				workQueue <- pw
 				lrg.Debug("Discarded piece: hash doesn't match")
 			} else {

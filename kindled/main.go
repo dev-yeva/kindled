@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+
 	cfg, err := config.New()
 	if err != nil {
 		slog.Error("Failed to create config", "error", err)
@@ -41,6 +42,9 @@ func main() {
 	)
 
 	addrs := announceClient.MakeAnnounce(localPeerID)
+	if len(addrs) == 0 {
+		os.Exit(0)
+	}
 
 	peerClient := peer.NewPeerClient(*logger, torrentFile, &cfg.Peer, addrs, localPeerID)
 	peerClient.Download()
@@ -51,21 +55,14 @@ func GetFlags(lgr *slog.Logger) (string, string) {
 	saveFolder := flag.String("dest", "", "Path to destination folder")
 
 	flag.Usage = func() {
-		lgr.Info("Program usage: kindled --torrent=example.torrent --dest=./downloads")
+		lgr.Info("Program usage:", "kindled --torrent", "some.torrent", "--dest", "./downloads")
 	}
 
 	flag.Parse()
 
-	if *torrentPath == "" {
-		lgr.Error("Missing required flag --torrent")
+	if *torrentPath == "" || *saveFolder == "" {
 		flag.Usage()
-		os.Exit(1)
-	}
-
-	if *torrentPath == "" {
-		lgr.Error("Missing required flag --torrent")
-		flag.Usage()
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	return *torrentPath, *saveFolder
