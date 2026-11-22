@@ -6,10 +6,13 @@ import (
 	"kindled/lib"
 	"kindled/logger"
 	"kindled/torrent/peer"
-	"kindled/torrent/torrentfile"
+	"kindled/torrent/progress_file"
+	"kindled/torrent/torrent_file"
 	"kindled/torrent/tracker"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -23,12 +26,11 @@ func main() {
 	logger := logger.New(&cfg.Logger)
 
 	torrentFilePath, saveFolder := GetFlags(logger)
-	torrentFile, err := torrentfile.Open(torrentFilePath, saveFolder)
+	torrentFile, err := torrent_file.Open(torrentFilePath, saveFolder)
 	if err != nil {
 		logger.Error("Failed to parse torrent file", "path", torrentFilePath, "error", err)
 		os.Exit(1)
 	}
-
 	logger.Info("Parsed torrent file", "torrent_file", torrentFile)
 
 	localPeerID := lib.GenerateLocalPeerID()
@@ -46,7 +48,21 @@ func main() {
 		os.Exit(0)
 	}
 
-	peerClient := peer.NewPeerClient(*logger, torrentFile, &cfg.Peer, addrs, localPeerID)
+	progressFile, err := progress_file.New(
+		logger,
+		torrentFile.Info.Name,
+		saveFolder,
+		torrentFile.Info.Files.Number() > 1,
+		uint32(len(torrentFile.Info.PieceHashes)),
+	)
+	if err != nil {
+		logger.Error("Failed to create progress file", "error", err)
+		os.Exit(1)
+	}
+
+	go GracefulShutdown(progressFile)
+
+	peerClient := peer.NewPeerClient(logger, torrentFile, progressFile, &cfg.Peer, addrs, localPeerID)
 	peerClient.Download()
 }
 
@@ -66,4 +82,12 @@ func GetFlags(lgr *slog.Logger) (string, string) {
 	}
 
 	return *torrentPath, *saveFolder
+}
+
+func GracefulShutdown(pf *progress_file.ProgressFile) {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	<-signalChan
+	pf.Save()
+	os.Exit(0)
 }

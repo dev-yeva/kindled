@@ -1,4 +1,4 @@
-package torrentfile
+package torrent_file
 
 import (
 	"fmt"
@@ -6,6 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+)
+
+const (
+	mode = 0644
 )
 
 type Files struct {
@@ -52,7 +56,7 @@ func (fs *Files) AddFile(path string, length int64) error {
 		cumLen = length + fs.files[lastIdx].CumulativeLength
 	}
 
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, progressFileMode)
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, mode)
 	if err != nil {
 		return fmt.Errorf("Failed to create/open progress file: %w", err)
 	}
@@ -63,6 +67,10 @@ func (fs *Files) AddFile(path string, length int64) error {
 		File:             file,
 	})
 	return nil
+}
+
+func (fs *Files) Number() int {
+	return len(fs.files)
 }
 
 func (fs *Files) WritePiece(index int64, data []byte) error {

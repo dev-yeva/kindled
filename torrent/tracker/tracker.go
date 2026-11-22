@@ -3,7 +3,7 @@ package tracker
 import (
 	"kindled/config"
 	"kindled/lib/addresses"
-	"kindled/torrent/torrentfile"
+	"kindled/torrent/torrent_file"
 	"kindled/torrent/tracker/common"
 	"kindled/torrent/tracker/httptracker"
 	"kindled/torrent/tracker/udptracker"
@@ -16,7 +16,7 @@ import (
 
 type AnnounceClient struct {
 	logger      slog.Logger
-	torrentFile *torrentfile.TorrentFile
+	torrentFile *torrent_file.TorrentFile
 	httpClient  *http.Client
 	httpCfg     *config.HTTPTracker
 	udpCfg      *config.UDPTracker
@@ -25,7 +25,7 @@ type AnnounceClient struct {
 
 func NewAnnounceClient(
 	logger slog.Logger,
-	tf *torrentfile.TorrentFile,
+	tf *torrent_file.TorrentFile,
 	httpCfg *config.HTTPTracker,
 	udpCfg *config.UDPTracker,
 	localPort uint16,

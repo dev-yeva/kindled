@@ -1,4 +1,4 @@
-package torrentfile
+package torrent_file
 
 import (
 	"crypto/sha1"
@@ -19,10 +19,10 @@ type TorrentFile struct {
 	CreatedBy    string
 	CreationDate int64
 	Info         Info
-	Progress     *ProgressFile // Bitfield of downloaded pieces
 }
 
 type Info struct {
+	Name        string
 	TotalLength uint64     // Total size of data to download
 	Files       *Files     // Unlike original structure, not empty for single-file torrents
 	PieceLength uint32     // Size of the chunks files are split into
@@ -99,16 +99,6 @@ func Open(fileName, saveFolder string) (*TorrentFile, error) {
 		pieceHashes = append(pieceHashes, hash)
 	}
 
-	var subfolder string      // multi-torrent files are saved in dest/name folder
-	if tf.Info.Files != nil { // multi-file torrent
-		subfolder = tf.Info.Name
-	}
-
-	progressFile, err := NewProgressFile(tf.Info.Name, filepath.Join(saveFolder, subfolder), pieceCount)
-	if err != nil {
-		return nil, err
-	}
-
 	return &TorrentFile{
 		InfoHash:     infoHash,
 		TrackerList:  trackerList,
@@ -116,11 +106,11 @@ func Open(fileName, saveFolder string) (*TorrentFile, error) {
 		CreatedBy:    tf.CreatedBy,
 		CreationDate: tf.CreationDate,
 		Info: Info{
+			Name:        tf.Info.Name,
 			TotalLength: totalLength,
 			Files:       files,
 			PieceLength: tf.Info.PieceLength,
 			PieceHashes: pieceHashes,
 		},
-		Progress: progressFile,
 	}, nil
 }

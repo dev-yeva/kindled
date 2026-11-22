@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"kindled/config"
-	"kindled/torrent/torrentfile"
+	"kindled/torrent/torrent_file"
 	"kindled/torrent/tracker/common"
 	"net"
 	"net/http"
@@ -29,7 +29,7 @@ func MakeHTTPAnnounce(
 	cfg *config.HTTPTracker,
 	client *http.Client,
 	trackerURL *url.URL,
-	torrentFile *torrentfile.TorrentFile,
+	torrentFile *torrent_file.TorrentFile,
 	localPeerID []byte,
 	localPort uint16,
 ) (*common.AnnounceResponse, error) {
