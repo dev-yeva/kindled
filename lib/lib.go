@@ -12,6 +12,10 @@ type Numeric interface {
 		~float32 | ~float64
 }
 
+const (
+	clientPrefix = "-KD001A-"
+)
+
 var (
 	dataUnits = []string{"b", "kb", "mb", "gb"}
 )
@@ -32,6 +36,7 @@ func ConvertBytes[n Numeric](bytesNum n) string {
 
 func GenerateLocalPeerID() []byte {
 	localPeerID := make([]byte, 20)
-	rand.Read(localPeerID)
+	n := copy(localPeerID[0:], []byte(clientPrefix))
+	rand.Read(localPeerID[n:])
 	return localPeerID
 }

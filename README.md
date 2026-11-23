@@ -7,7 +7,7 @@ A BitTorrent CLI client written in Go. Implements the BitTorrent protocol based 
 Implemented BEPs:
 * BEP-3:	[The BitTorrent Protocol Specification](https://www.bittorrent.org/beps/bep_0003.html)
 * BEP-15: [UDP Tracker Protocol for BitTorrent](https://www.bittorrent.org/beps/bep_0015.html)
-
+* BEP-20: [Peer ID Conventions](https://www.bittorrent.org/beps/bep_0020.html)
 # Installation
 
 ## 1. Clone the repository
